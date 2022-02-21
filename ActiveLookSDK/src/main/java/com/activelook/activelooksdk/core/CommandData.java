@@ -232,10 +232,8 @@ public final class CommandData {
     }
 
 
-    public CommandData addNonNulTerminatedStrings(final String ...strings) {
-        for (final String str : strings) {
-            this.add(str.getBytes(StandardCharsets.US_ASCII));
-        }
+    public CommandData addNonNulTerminatedString(String str) {
+        this.add(str.getBytes(StandardCharsets.US_ASCII));
         return this;
     }
 
