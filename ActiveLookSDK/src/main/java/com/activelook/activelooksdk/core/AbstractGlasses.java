@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractGlasses implements Glasses {
 
@@ -150,7 +151,7 @@ public abstract class AbstractGlasses implements Glasses {
     static final byte ID_cfgFreeSpace = (byte) 0xD7;
     static final byte ID_cfgGetNb = (byte) 0xD8;
     static final byte ID_shutdown = (byte) 0xE0;
-    private final HashMap<QueryId, Consumer<byte[]>> callbacks;
+    private final ConcurrentHashMap<QueryId, Consumer<byte[]>> callbacks;
     private QueryId currentQID;
 
     /*
@@ -158,7 +159,7 @@ public abstract class AbstractGlasses implements Glasses {
      */
     protected AbstractGlasses() {
         this.currentQID = new QueryId();
-        this.callbacks = new HashMap<>();
+        this.callbacks = new ConcurrentHashMap<>();
     }
 
     protected void writeBytes(byte[] bytes) {
@@ -178,7 +179,11 @@ public abstract class AbstractGlasses implements Glasses {
     Private helpers
      */
     private void registerCallback(QueryId queryId, Consumer<byte[]> callback) {
-        this.callbacks.put(queryId, callback);
+        if (callback == null) {
+            this.callbacks.remove(queryId);
+        } else {
+            this.callbacks.put(queryId, callback);
+        }
     }
 
     private QueryId nextQueryId() {
@@ -190,6 +195,7 @@ public abstract class AbstractGlasses implements Glasses {
     private void writeCommand(final Command command) {
         final QueryId qid = this.nextQueryId();
         command.setQueryId(qid);
+        this.registerCallback(qid, null);
         this.writeBytes(command.toBytes());
     }
 
