@@ -32,7 +32,10 @@ import com.activelook.activelooksdk.types.FlowControlStatus;
 import com.activelook.activelooksdk.types.Utils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -290,29 +293,35 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
         this.unstackWriteRxCharacteristic();
     }
 
+    private byte[] joinArrays(List<byte[]> inp, int totalLen) {
+        byte[] result = new byte[totalLen];
+        int offset = 0;
+        for (byte[] cmd : inp) {
+            System.arraycopy(cmd, 0, result, offset, cmd.length);
+            offset += cmd.length;
+        }
+        return result;
+    }
+
+    /* Fill payload up to MTU */
+    private byte[] unstackPayload() {
+        ArrayList<byte[]> stack = new ArrayList<>();
+        int stackSize = 0;
+        while (true) {
+            byte[] cmd = this.pendingWriteRxCharacteristic.peek();
+            if (cmd == null || stackSize + cmd.length > this.mtu)
+                break;
+            // Remove the first command that is in 'cmd'
+            this.pendingWriteRxCharacteristic.poll();
+            stack.add(cmd);
+            stackSize += cmd.length;
+        }
+        return joinArrays(stack, stackSize);
+    }
+
     synchronized void unstackWriteRxCharacteristic() {
         if (this.flowControlCanSend.get() && this.pendingWriteRxCharacteristic.size()>0 && this.isWritingCommand.compareAndSet(false, true)) {
-            final ConcurrentLinkedQueue<byte []> stack = new ConcurrentLinkedQueue<>();
-            int stackSize = 0;
-            while (stackSize < this.mtu && this.pendingWriteRxCharacteristic.size()>0 && stack.size() < 4) {
-                final byte [] buffer = this.pendingWriteRxCharacteristic.poll();
-                stack.add(buffer);
-                stackSize += buffer.length;
-            }
-            final byte [] payload = new byte [Math.min(stackSize, this.mtu)];
-            int offset = 0;
-            while (stack.size() > 1) {
-                final byte [] buffer = stack.poll();
-                System.arraycopy(buffer, 0, payload, offset, buffer.length);
-                offset += buffer.length;
-            }
-            final byte[] buffer = stack.poll();
-            final int sizeOutOfPayload = Math.max(0, stackSize - this.mtu);
-            if (sizeOutOfPayload <= 0) {
-                System.arraycopy(buffer, 0, payload, offset, buffer.length);
-            } else {
-                this.pendingWriteRxCharacteristic.addFirst(buffer);
-            }
+            final byte[] payload = unstackPayload();
             Log.d("unstackWriteCommand", String.format("write rx: %s", Utils.bytesToHexString(payload)));
             while(!this.getRxCharacteristic().setValue(payload)) {
                 try {
@@ -320,7 +329,7 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                Log.e("unstackWriteCommand", String.format("Could not update rx: %s", Utils.bytesToHexString(buffer)));
+                Log.e("unstackWriteCommand", String.format("Could not update rx: %s", Utils.bytesToHexString(payload)));
             }
             while(!this.gatt.writeCharacteristic(this.getRxCharacteristic())) {
                 try {
@@ -328,7 +337,7 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                Log.e("unstackWriteCommand", String.format("Could not write rx: %s", Utils.bytesToHexString(buffer)));
+                Log.e("unstackWriteCommand", String.format("Could not write rx: %s", Utils.bytesToHexString(payload)));
             }
         } else {
             Log.d("unstackWriteCommand", String.format("Stacking %d", this.pendingWriteRxCharacteristic.size()));
