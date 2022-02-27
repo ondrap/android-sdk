@@ -297,7 +297,7 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
     void flushWrites() {
         flushLock.lock();
         try {
-            while (pendingWriteRxCharacteristic.size() > 0) {
+            while (pendingWriteRxCharacteristic.size() > 0 || isWritingCommand.get()) {
                 writeQueueEmpty.await();
             }
         } catch (InterruptedException e) {
@@ -378,6 +378,11 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
             }
             if (this.pendingWriteRxCharacteristic.size()==0) {
                 Log.d("unstackWriteCommand", String.format("nothing to send"));
+                // After setting isWriting to fals, unstackWriteRxCharacteristic() is called;
+                // if the queue is empty, signal to the flush
+                flushLock.lock();
+                writeQueueEmpty.signal();
+                flushLock.unlock();
             }
         }
     }
