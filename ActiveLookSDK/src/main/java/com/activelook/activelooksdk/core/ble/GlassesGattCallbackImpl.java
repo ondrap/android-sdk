@@ -307,7 +307,7 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
     private byte[] unstackPayload() {
         ArrayList<byte[]> stack = new ArrayList<>();
         int stackSize = 0;
-        while (true) {
+        while (stack.size() < 2) {
             byte[] cmd = this.pendingWriteRxCharacteristic.peek();
             if (cmd == null || stackSize + cmd.length > this.mtu)
                 break;
