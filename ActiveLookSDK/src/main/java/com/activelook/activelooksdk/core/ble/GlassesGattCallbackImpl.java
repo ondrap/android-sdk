@@ -43,6 +43,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 class GlassesGattCallbackImpl extends BluetoothGattCallback {
 
@@ -178,12 +181,12 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
                 if (Command.isValidBuffer(buffer)) {
                     this.pendingBuffer = null;
                     final Command command = new Command(buffer);
-                    Log.w("onTXChanged Buffered", command.toString());
+                    Log.e("onTXChanged Buffered", command.toString());
                     this.glasses.callCallback(command);
                 }
             } else if (Command.isValidBuffer(buffer)) {
                 final Command command = new Command(buffer);
-                Log.w("onTXChanged", command.toString());
+                Log.e("onTXChanged", command.toString());
                 this.glasses.callCallback(command);
             } else {
                 this.addPendingBuffer(buffer);
@@ -287,6 +290,24 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
         this.onConnected = onConnected;
     }
 
+    private final Lock flushLock = new ReentrantLock();
+    private final Condition writeQueueEmpty = flushLock.newCondition();
+
+    /* Waint until write queue is empty */
+    void flushWrites() {
+        flushLock.lock();
+        try {
+            while (pendingWriteRxCharacteristic.size() > 0) {
+                writeQueueEmpty.await();
+            }
+        } catch (InterruptedException e) {
+            // What to do?
+            ;
+        } finally {
+            flushLock.unlock();
+        }
+    }
+
     void writeRxCharacteristic(byte[] bytes) {
         final byte [][] chunks = Utils.split(bytes, this.mtu);
         this.pendingWriteRxCharacteristic.addAll(Arrays.asList(chunks));
@@ -307,14 +328,22 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
     private byte[] unstackPayload() {
         ArrayList<byte[]> stack = new ArrayList<>();
         int stackSize = 0;
-        while (stack.size() < 2) {
-            byte[] cmd = this.pendingWriteRxCharacteristic.peek();
-            if (cmd == null || stackSize + cmd.length > this.mtu)
-                break;
-            // Remove the first command that is in 'cmd'
-            this.pendingWriteRxCharacteristic.poll();
-            stack.add(cmd);
-            stackSize += cmd.length;
+        flushLock.lock();
+        try {
+            while (stack.size() < 2) {
+                byte[] cmd = this.pendingWriteRxCharacteristic.peek();
+                if (cmd == null || stackSize + cmd.length > this.mtu)
+                    break;
+                // Remove the first command that is in 'cmd'
+                this.pendingWriteRxCharacteristic.poll();
+                stack.add(cmd);
+                stackSize += cmd.length;
+            }
+            if (pendingWriteRxCharacteristic.size() == 0) {
+                writeQueueEmpty.signal();
+            }
+        } finally {
+            flushLock.unlock();
         }
         return joinArrays(stack, stackSize);
     }

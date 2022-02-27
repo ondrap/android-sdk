@@ -645,4 +645,9 @@ public interface Glasses extends Parcelable {
         this.polyline(xys);
     }
 
+    /**
+     * Wait until the write queue is empty
+     */
+    void flush();
+
 }

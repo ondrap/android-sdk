@@ -154,6 +154,11 @@ class GlassesImpl extends AbstractGlasses implements Glasses {
         this.gattCallbacks.subscribeToSensorInterfaceNotifications(onEvent);
     }
 
+    @Override
+    public void flush() {
+        gattCallbacks.flushWrites();
+    }
+
     void callCallback(Command command) {
         this.delegateToCallback(command);
     }

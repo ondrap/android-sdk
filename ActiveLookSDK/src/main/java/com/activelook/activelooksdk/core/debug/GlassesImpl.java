@@ -115,6 +115,10 @@ class GlassesImpl extends AbstractGlasses implements Glasses {
     }
 
     @Override
+    public void flush() {
+    }
+
+    @Override
     public void writeBytes(byte[] bytes) {
         StringBuilder result = new StringBuilder();
         String prefix = "[ ";
