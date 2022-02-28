@@ -14,6 +14,7 @@ limitations under the License.
 */
 package com.activelook.activelooksdk.core.ble;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
@@ -34,10 +35,8 @@ import com.activelook.activelooksdk.types.Utils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -293,12 +292,16 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
     private final Lock flushLock = new ReentrantLock();
     private final Condition writeQueueEmpty = flushLock.newCondition();
 
-    /* Waint until write queue is empty */
+    /* Waint until write queue is empty; timeout 5 seconds */
     void flushWrites() {
         flushLock.lock();
         try {
             while (pendingWriteRxCharacteristic.size() > 0 || isWritingCommand.get()) {
-                writeQueueEmpty.await();
+                boolean timedOut = !writeQueueEmpty.await(5, TimeUnit.SECONDS);
+                if (timedOut) {
+                    Log.e("glassTest", "Timed out when waiting for queue flush");
+                    break;
+                }
             }
         } catch (InterruptedException e) {
             // What to do?
@@ -348,26 +351,49 @@ class GlassesGattCallbackImpl extends BluetoothGattCallback {
         return joinArrays(stack, stackSize);
     }
 
+    @SuppressLint("MissingPermission")
+    private void sendPayload(byte[] payload) {
+        boolean valueSet = false;
+        for (int i=0; i < 5; i++) {
+            if (this.getRxCharacteristic().setValue(payload)) {
+                valueSet = true;
+                break;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Log.e("unstackWriteCommand", String.format("Could not update rx: %s", Utils.bytesToHexString(payload)));
+        }
+        if (!valueSet) {
+            Log.e("unstackWriteCommand", "Could not update rx; giving up.");
+            return;
+        }
+
+        valueSet = false;
+        for (int i = 0; i < 5; i++) {
+            if (this.gatt.writeCharacteristic(this.getRxCharacteristic())) {
+                valueSet = true;
+                break;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Log.e("unstackWriteCommand", String.format("Could not write rx: %s", Utils.bytesToHexString(payload)));
+        }
+        if (!valueSet) {
+            Log.e("unstackWriteCommand", "Could not write rx, giving up");
+        }
+    }
+
     synchronized void unstackWriteRxCharacteristic() {
         if (this.flowControlCanSend.get() && this.pendingWriteRxCharacteristic.size()>0 && this.isWritingCommand.compareAndSet(false, true)) {
             final byte[] payload = unstackPayload();
             Log.d("unstackWriteCommand", String.format("write rx: %s", Utils.bytesToHexString(payload)));
-            while(!this.getRxCharacteristic().setValue(payload)) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                Log.e("unstackWriteCommand", String.format("Could not update rx: %s", Utils.bytesToHexString(payload)));
-            }
-            while(!this.gatt.writeCharacteristic(this.getRxCharacteristic())) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                Log.e("unstackWriteCommand", String.format("Could not write rx: %s", Utils.bytesToHexString(payload)));
-            }
+            sendPayload(payload);
         } else {
             Log.d("unstackWriteCommand", String.format("Stacking %d", this.pendingWriteRxCharacteristic.size()));
             if (!this.flowControlCanSend.get()) {
