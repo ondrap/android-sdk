@@ -51,6 +51,11 @@ class SdkImpl implements Sdk {
     }
 
     @Override
+    public void startScan(String address, Consumer<DiscoveredGlasses> onDiscoverGlasses) {
+        startScan(onDiscoverGlasses);
+    }
+
+    @Override
     public void stopScan() {
         this.isScanning.set(false);
     }

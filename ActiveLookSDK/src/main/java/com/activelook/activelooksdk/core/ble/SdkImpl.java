@@ -14,13 +14,17 @@ limitations under the License.
 */
 package com.activelook.activelooksdk.core.ble;
 
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
 import com.activelook.activelooksdk.DiscoveredGlasses;
@@ -28,6 +32,8 @@ import com.activelook.activelooksdk.Glasses;
 import com.activelook.activelooksdk.Sdk;
 import com.activelook.activelooksdk.exceptions.UnsupportedBleException;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 
 class SdkImpl implements Sdk {
@@ -57,10 +63,21 @@ class SdkImpl implements Sdk {
         Toast.makeText(this.context, text, Toast.LENGTH_SHORT).show();
     }
 
+    @SuppressLint("MissingPermission")
     @Override
-    public void startScan(Consumer<DiscoveredGlasses> onDiscoverGlasses) {
+    public void startScan(@Nullable String address, Consumer<DiscoveredGlasses> onDiscoverGlasses) {
         this.scanCallback = new ScanCallbackImpl(onDiscoverGlasses);
-        this.scanner.startScan(this.scanCallback);
+        if (address != null) {
+            ScanFilter scanFilterMac = new ScanFilter.Builder().setDeviceAddress(address).build();
+            ScanSettings scanSettings = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build();
+            this.scanner.startScan(Collections.singletonList(scanFilterMac), scanSettings, scanCallback);
+        } else {
+            this.scanner.startScan(this.scanCallback);
+        }
+    }
+
+    public void startScan(Consumer<DiscoveredGlasses> onDiscoverGlasses) {
+        startScan(null, onDiscoverGlasses);
     }
 
     @Override

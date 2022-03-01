@@ -47,6 +47,15 @@ public interface Sdk {
      * @param onDiscoverGlasses The callback to call for each discovered glasses
      */
     void startScan(Consumer<DiscoveredGlasses> onDiscoverGlasses);
+
+    /**
+     * Enter scan mode for searching glasses.
+     *
+     * @param onDiscoverGlasses The callback to call for each discovered glasses
+     * @param address The particular address to scan for
+     */
+    void startScan(String address, Consumer<DiscoveredGlasses> onDiscoverGlasses);
+
     /**
      * Quit scan mode.
      */
