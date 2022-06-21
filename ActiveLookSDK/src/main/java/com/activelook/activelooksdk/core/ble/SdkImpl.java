@@ -24,6 +24,7 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
@@ -41,7 +42,7 @@ class SdkImpl implements Sdk {
     private final Context context;
     private final BluetoothManager manager;
     final BluetoothAdapter adapter;
-    private final BluetoothLeScanner scanner;
+    @NonNull private final BluetoothLeScanner scanner;
     private final HashMap<String, GlassesImpl> connectedGlasses = new HashMap<>();
     private ScanCallback scanCallback;
 
@@ -52,7 +53,11 @@ class SdkImpl implements Sdk {
         if (this.adapter == null) {
             throw new UnsupportedBleException();
         }
-        this.scanner = this.adapter.getBluetoothLeScanner();
+        BluetoothLeScanner scanner = this.adapter.getBluetoothLeScanner();
+        if (scanner == null) {
+            throw new UnsupportedBleException();
+        }
+        this.scanner = scanner;
     }
 
     Context getContext() {
@@ -80,6 +85,7 @@ class SdkImpl implements Sdk {
         startScan(null, onDiscoverGlasses);
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void stopScan() {
         this.scanner.stopScan(this.scanCallback);
