@@ -55,7 +55,7 @@ class SdkImpl implements Sdk {
         }
         BluetoothLeScanner scanner = this.adapter.getBluetoothLeScanner();
         if (scanner == null) {
-            throw new UnsupportedBleException();
+            throw new RuntimeException("Bluetooth turned off");
         }
         this.scanner = scanner;
     }
