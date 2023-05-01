@@ -27,6 +27,7 @@ import android.content.IntentFilter;
 import android.util.Pair;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.util.Consumer;
 import androidx.core.util.Predicate;
 
@@ -46,7 +47,7 @@ class SdkImpl implements Sdk {
     private final GlassesUpdater updater;
     private final BluetoothManager manager;
     private final BluetoothAdapter adapter;
-    private final BluetoothLeScanner scanner;
+    @NonNull private final BluetoothLeScanner scanner;
     private final HashMap<String, GlassesImpl> connectedGlasses = new HashMap<>();
     private final BroadcastReceiver broadcastReceiver;
     private ScanCallback scanCallback;
@@ -102,7 +103,11 @@ class SdkImpl implements Sdk {
             }
         };
         this.context.registerReceiver(this.broadcastReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
-        this.scanner = this.adapter.getBluetoothLeScanner();
+        BluetoothLeScanner scanner = this.adapter.getBluetoothLeScanner();
+        if (scanner == null) {
+            throw new RuntimeException("Bluetooth turned off");
+        }
+        this.scanner = scanner;
     }
 
     Context getContext() {
